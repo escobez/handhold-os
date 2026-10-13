@@ -2,44 +2,76 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, ArrowRight, Check, ArrowLeft, Bot, Building2, User, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Sparkles, ArrowRight, Check, ArrowLeft, Bot, Building2, User, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function RegisterPage() {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
+    password: "",
     company: "",
     productUrl: "",
-    buyerSegment: "Enterprise B2B",
+    buyerSegment: "Grandes Empresas (B2B)",
     agentPersona: "Conselheiro Executivo",
     enableTrcp: true,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [verifyUrl, setVerifyUrl] = useState("");
   const [isDone, setIsDone] = useState(false);
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    setErrorMessage("");
     if (step < 3) {
+      if (step === 1) {
+        if (!formData.fullName || !formData.email || !formData.password) {
+          setErrorMessage("Por favor, preencha todos os campos obrigatórios.");
+          return;
+        }
+        if (formData.password.length < 6) {
+          setErrorMessage("A senha deve possuir pelo menos 6 caracteres.");
+          return;
+        }
+      }
       setStep(step + 1);
     } else {
       setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          setErrorMessage(data.error || "Erro ao criar conta.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        setVerifyUrl(data.verifyUrl || "");
         setIsDone(true);
-      }, 1200);
+      } catch (err) {
+        setErrorMessage("Erro de rede ao conectar com o servidor.");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
   const handleBack = () => {
-    if (step > 1) setStep(step - 1);
+    if (step > 1) {
+      setErrorMessage("");
+      setStep(step - 1);
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#080A0F] text-[#F3F4F6] flex flex-col justify-between p-4 sm:p-6 md:p-8 relative overflow-hidden">
-      {/* Luz ambiente de fundo */}
       <div className="absolute top-1/4 right-1/4 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
 
-      {/* Cabeçalho */}
       <header className="max-w-7xl mx-auto w-full flex items-center justify-between z-10">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-400 p-[1px]">
@@ -63,10 +95,8 @@ export default function RegisterPage() {
         </div>
       </header>
 
-      {/* Cartão Central do Onboarding */}
       <main className="max-w-xl w-full mx-auto my-10 z-10">
         <div className="rounded-3xl bg-[#10141F] border border-white/10 p-8 sm:p-10 shadow-2xl backdrop-blur-xl">
-          {/* Indicador de Etapas */}
           {!isDone && (
             <div className="flex items-center justify-between mb-8 pb-6 border-b border-white/5">
               <div className="flex items-center gap-3">
@@ -94,54 +124,66 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {errorMessage && (
+            <div className="mb-6 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           {isDone ? (
-            <div className="py-8 text-center space-y-4 animate-in fade-in">
+            <div className="py-6 text-center space-y-4 animate-in fade-in">
               <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h2 className="font-serif text-3xl font-medium text-white">
-                Espaço de Trabalho Criado!
+                Conta Criada com Sucesso!
               </h2>
               <p className="text-xs text-neutral-300 max-w-sm mx-auto leading-relaxed">
-                O seu guia autônomo para <strong className="text-white">{formData.company || "Sua Empresa"}</strong> foi sintetizado com a persona <span className="text-indigo-400 font-mono">{formData.agentPersona}</span>.
+                Um e-mail de ativação foi enviado para <strong className="text-white">{formData.email}</strong>.
               </p>
 
-              <div className="p-4 rounded-2xl bg-black/40 border border-white/5 text-left text-xs font-mono text-neutral-300 space-y-2 mt-4">
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Motor TRCP Prospector:</span>
-                  <span className="text-emerald-400">Ativo (Multi-Espelho Overpass)</span>
+              {/* Link de ativação imediato para demonstração e testes */}
+              {verifyUrl && (
+                <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-left text-xs space-y-2 mt-4">
+                  <div className="flex items-center gap-2 text-indigo-300 font-medium">
+                    <Sparkles className="w-4 h-4 text-indigo-400" />
+                    <span>Link de Ativação Direta (Ambiente de Testes):</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 font-mono break-all bg-black/40 p-2 rounded border border-white/5">
+                    {verifyUrl}
+                  </p>
+                  <div className="pt-2">
+                    <a
+                      href={verifyUrl}
+                      className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
+                    >
+                      <span>Ativar Conta com 1 Clique</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">URL Dedicada do Guia:</span>
-                  <span className="text-indigo-300">guia.handhold.io/{formData.company.toLowerCase().replace(/\s+/g, "") || "preview"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Período de Avaliação:</span>
-                  <span className="text-white">14 Dias Ilimitados</span>
-                </div>
-              </div>
+              )}
 
               <div className="pt-4">
                 <Link
-                  href="/"
-                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-white text-black text-xs font-medium hover:bg-neutral-200 transition-all shadow-xl"
+                  href="/login"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full border border-white/10 hover:bg-white/5 text-neutral-300 text-xs transition-all"
                 >
-                  <span>Acessar Painel de Controle</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Ir para Tela de Login</span>
                 </Link>
               </div>
             </div>
           ) : (
             <div>
-              {/* ETAPA 1: Dados do Perfil */}
               {step === 1 && (
-                <div className="space-y-5 animate-in fade-in">
+                <div className="space-y-4 animate-in fade-in">
                   <div>
                     <h2 className="font-serif text-2xl font-medium text-white">
-                      Vamos configurar sua área de trabalho
+                      Vamos configurar sua conta
                     </h2>
                     <p className="text-xs text-neutral-400 mt-1">
-                      Sem necessidade de cartão de crédito. Teste de 14 dias grátis.
+                      Sem necessidade de cartão. Teste de 14 dias grátis.
                     </p>
                   </div>
 
@@ -151,6 +193,7 @@ export default function RegisterPage() {
                       <input
                         type="text"
                         placeholder="Ana Silva"
+                        required
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                         className="w-full bg-[#080A0F] border border-white/10 rounded-full py-2.5 px-4 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-500"
@@ -162,8 +205,21 @@ export default function RegisterPage() {
                       <input
                         type="email"
                         placeholder="ana@empresa.com.br"
+                        required
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full bg-[#080A0F] border border-white/10 rounded-full py-2.5 px-4 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-mono text-neutral-400 uppercase">Senha de Acesso</label>
+                      <input
+                        type="password"
+                        placeholder="Mínimo 6 caracteres"
+                        required
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className="w-full bg-[#080A0F] border border-white/10 rounded-full py-2.5 px-4 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -182,7 +238,6 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* ETAPA 2: Produto e Público */}
               {step === 2 && (
                 <div className="space-y-5 animate-in fade-in">
                   <div>
@@ -229,7 +284,6 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* ETAPA 3: Persona do Agente e TRCP */}
               {step === 3 && (
                 <div className="space-y-5 animate-in fade-in">
                   <div>
@@ -286,7 +340,6 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Botões de Navegação */}
               <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
                 {step > 1 ? (
                   <button
@@ -311,7 +364,7 @@ export default function RegisterPage() {
                     <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      <span>{step === 3 ? "Ativar Espaço de Trabalho" : "Continuar"}</span>
+                      <span>{step === 3 ? "Criar Conta & Gerar Ativação" : "Continuar"}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </>
                   )}

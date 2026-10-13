@@ -2,35 +2,58 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, ArrowRight, Shield, Lock, Mail, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Sparkles, ArrowRight, Shield, Lock, Mail, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    setErrorMessage("");
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.error || "Falha na autenticação.");
+        setIsLoading(false);
+        return;
+      }
+
       setIsSuccess(true);
-    }, 1000);
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1000);
+    } catch (err) {
+      setErrorMessage("Erro de conexão com o servidor.");
+      setIsLoading(false);
+    }
   };
 
   const handleDemoFill = () => {
     setEmail("fundador@empresa.com.br");
     setPassword("Handhold2026!Seguro");
+    setErrorMessage("");
   };
 
   return (
     <div className="min-h-screen bg-[#080A0F] text-[#F3F4F6] flex flex-col justify-between p-4 sm:p-6 md:p-8 relative overflow-hidden">
-      {/* Luz radial de fundo */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none" />
 
-      {/* Barra de Cabeçalho */}
       <header className="max-w-7xl mx-auto w-full flex items-center justify-between z-10">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-400 p-[1px]">
@@ -51,7 +74,6 @@ export default function LoginPage() {
         </Link>
       </header>
 
-      {/* Cartão Central de Login */}
       <main className="max-w-md w-full mx-auto my-12 z-10">
         <div className="rounded-3xl bg-[#10141F] border border-white/10 p-8 sm:p-10 shadow-2xl backdrop-blur-xl relative">
           <div className="text-center mb-8">
@@ -73,6 +95,13 @@ export default function LoginPage() {
             <span>Preencher Credenciais Demo de Exemplo</span>
           </button>
 
+          {errorMessage && (
+            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           {isSuccess ? (
             <div className="py-8 text-center space-y-3 animate-in fade-in">
               <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
@@ -80,21 +109,11 @@ export default function LoginPage() {
               </div>
               <h3 className="font-serif text-xl font-medium text-white">Sessão Autenticada</h3>
               <p className="text-xs text-neutral-400">
-                Bem-vindo de volta, {email}. Redirecionando para o painel de inteligência...
+                Redirecionando para o seu Dashboard de Produção...
               </p>
-              <div className="pt-2">
-                <Link
-                  href="/"
-                  className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-mono"
-                >
-                  <span>Continuar para a Área de Trabalho</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* E-mail */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-mono uppercase tracking-wider text-neutral-400">
                   E-mail Corporativo
@@ -112,7 +131,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Senha */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-mono uppercase tracking-wider text-neutral-400">
@@ -142,7 +160,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Botão de Envio */}
               <button
                 type="submit"
                 disabled={isLoading}
@@ -160,7 +177,6 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* Divisor de Cadastro */}
           <div className="mt-6 pt-6 border-t border-white/5 text-center">
             <p className="text-xs text-neutral-500">
               Ainda não tem conta corporativa?{" "}
@@ -172,7 +188,6 @@ export default function LoginPage() {
         </div>
       </main>
 
-      {/* Rodapé de Segurança */}
       <footer className="text-center text-[11px] text-neutral-500 z-10">
         Protegido com criptografia TLS 1.3 de ponta a ponta e certificação SOC2 Tipo II
       </footer>
