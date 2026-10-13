@@ -49,16 +49,46 @@ export interface Lead {
   socialProfiles: string[];
   score: number;
   status: "new" | "contacted" | "qualified" | "converted" | "rejected";
+  tier: "no_website" | "broken_website" | "active_website" | "high_potential" | "disqualified";
+  websiteStatus: "active" | "broken" | "none" | "untested";
+  websiteHttpCode: number | null;
+  dealValue?: number;
+  paymentMethod?: "pix" | "credit_card" | "bank_slip";
   notes: string;
   createdAt: string;
   updatedAt: string;
 }
 
-interface DatabaseSchema {
+export interface SaleRecord {
+  id: string;
+  userId: string;
+  leadId: number;
+  leadName: string;
+  amount: number;
+  paymentMethod: "pix" | "credit_card" | "bank_slip";
+  status: "paid" | "pending";
+  date: string;
+  notes?: string;
+}
+
+export interface PaymentSettings {
+  pixKey: string;
+  pixKeyType: "cpf" | "cnpj" | "email" | "phone" | "random";
+  pixBeneficiary: string;
+  pixCity: string;
+  stripePublicKey?: string;
+  mercadoPagoPublicKey?: string;
+  asaasApiKey?: string;
+}
+
+export interface DatabaseSchema {
   users: User[];
   verificationTokens: VerificationToken[];
   aiAgents: AIAgent[];
   leads: Lead[];
+  sales: SaleRecord[];
+  paymentSettings: PaymentSettings;
+  geminiApiKey?: string;
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -138,6 +168,9 @@ const INITIAL_DATA: DatabaseSchema = {
       socialProfiles: ["https://instagram.com/padariagraonobre"],
       score: 95,
       status: "qualified",
+      tier: "active_website",
+      websiteStatus: "active",
+      websiteHttpCode: 200,
       notes: "Lead com alto interesse em IA para reservas e cardápio interativo.",
       createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
       updatedAt: new Date().toISOString(),
@@ -158,6 +191,9 @@ const INITIAL_DATA: DatabaseSchema = {
       socialProfiles: ["https://instagram.com/odontoprimesavassi"],
       score: 90,
       status: "contacted",
+      tier: "high_potential",
+      websiteStatus: "active",
+      websiteHttpCode: 200,
       notes: "Primeiro contato realizado via WhatsApp. Aguardando retorno da gestora.",
       createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
       updatedAt: new Date().toISOString(),
@@ -178,7 +214,10 @@ const INITIAL_DATA: DatabaseSchema = {
       socialProfiles: ["https://instagram.com/villatoscanabh"],
       score: 85,
       status: "new",
-      notes: "Capturado via TRCP Overpass Mirror #2. Telefone e Instagram verificados.",
+      tier: "broken_website",
+      websiteStatus: "broken",
+      websiteHttpCode: 502,
+      notes: "Site corporativo retornando erro 502 (Bad Gateway). Excelente gancho para oferecer modernização e nova landing page.",
       createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -198,7 +237,10 @@ const INITIAL_DATA: DatabaseSchema = {
       socialProfiles: [],
       score: 45,
       status: "new",
-      notes: "Possui apenas telefone fixo. Necessita enriquecimento cadastral.",
+      tier: "no_website",
+      websiteStatus: "none",
+      websiteHttpCode: null,
+      notes: "Estabelecimento de alto fluxo sem website registrado. Oportunidade prioritária para venda de presença digital e IA.",
       createdAt: new Date(Date.now() - 3600000 * 6).toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -218,11 +260,35 @@ const INITIAL_DATA: DatabaseSchema = {
       socialProfiles: ["https://linkedin.com/company/castroadvogados"],
       score: 100,
       status: "converted",
-      notes: "Contrato de demonstração fechado. Assinatura do plano Enterprise confirmada.",
+      tier: "active_website",
+      websiteStatus: "active",
+      websiteHttpCode: 200,
+      dealValue: 2400,
+      paymentMethod: "pix",
+      notes: "Contrato de demonstração fechado. Assinatura do plano Enterprise confirmada com pagamento via Pix.",
       createdAt: new Date(Date.now() - 3600000 * 72).toISOString(),
       updatedAt: new Date().toISOString(),
     },
   ],
+  sales: [
+    {
+      id: "sale_001",
+      userId: "usr_demo_123",
+      leadId: 5,
+      leadName: "Boutique Jurídica Castro & Associados",
+      amount: 2400,
+      paymentMethod: "pix",
+      status: "paid",
+      date: new Date(Date.now() - 3600000 * 24).toISOString(),
+      notes: "Plano Enterprise Anual Handhold OS + Agente Jurídico IA",
+    },
+  ],
+  paymentSettings: {
+    pixKey: "financeiro@handhold.io",
+    pixKeyType: "email",
+    pixBeneficiary: "Handhold Inteligência Comercial Ltda",
+    pixCity: "Belo Horizonte",
+  },
 };
 
 // Variável em memória para fallback caso o sistema de arquivos esteja em modo somente leitura (ex: Vercel lambdas)
@@ -230,6 +296,10 @@ let memoryStore: DatabaseSchema | null = null;
 
 export function getDatabase(): DatabaseSchema {
   if (memoryStore) {
+    if (!memoryStore.sales) memoryStore.sales = [];
+    if (!memoryStore.paymentSettings) {
+      memoryStore.paymentSettings = INITIAL_DATA.paymentSettings;
+    }
     return memoryStore;
   }
 
@@ -239,6 +309,16 @@ export function getDatabase(): DatabaseSchema {
     if (fs.existsSync(DB_FILE)) {
       const content = fs.readFileSync(DB_FILE, "utf-8");
       memoryStore = JSON.parse(content);
+      if (!memoryStore!.sales) memoryStore!.sales = INITIAL_DATA.sales;
+      if (!memoryStore!.paymentSettings) memoryStore!.paymentSettings = INITIAL_DATA.paymentSettings;
+      memoryStore!.leads.forEach((l) => {
+        if (!l.tier) {
+          if (!l.website) l.tier = "no_website";
+          else if (l.websiteStatus === "broken") l.tier = "broken_website";
+          else l.tier = "active_website";
+        }
+        if (!l.websiteStatus) l.websiteStatus = l.website ? "active" : "none";
+      });
       return memoryStore!;
     } else {
       fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_DATA, null, 2), "utf-8");

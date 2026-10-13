@@ -17,7 +17,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Bell,
-  Search,
+  BadgeDollarSign,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
@@ -64,6 +64,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       label: "Base de Leads (CRM)",
       href: "/dashboard/leads",
       icon: Users,
+    },
+    {
+      label: "Vendas & Caixa",
+      href: "/dashboard/sales",
+      icon: BadgeDollarSign,
     },
     {
       label: "Estúdio de Agentes IA",

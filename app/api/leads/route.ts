@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDatabase, saveDatabase, Lead } from "@/lib/db";
+import crypto from "crypto";
+import { getDatabase, saveDatabase, Lead, SaleRecord } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
+    const tier = searchParams.get("tier");
     const search = searchParams.get("search")?.toLowerCase();
     const minScore = parseInt(searchParams.get("minScore") || "0", 10);
 
@@ -20,13 +22,18 @@ export async function GET(req: NextRequest) {
       leads = leads.filter((l) => l.status === status);
     }
 
+    if (tier && tier !== "all") {
+      leads = leads.filter((l) => l.tier === tier);
+    }
+
     if (search) {
       leads = leads.filter(
         (l) =>
           l.name.toLowerCase().includes(search) ||
           l.category.toLowerCase().includes(search) ||
           l.location.toLowerCase().includes(search) ||
-          l.address.toLowerCase().includes(search)
+          l.address.toLowerCase().includes(search) ||
+          l.website?.toLowerCase().includes(search)
       );
     }
 
@@ -45,6 +52,10 @@ export async function GET(req: NextRequest) {
         qualified: db.leads.filter((l) => l.status === "qualified").length,
         converted: db.leads.filter((l) => l.status === "converted").length,
         highScore: db.leads.filter((l) => l.score >= 80).length,
+        noWebsite: db.leads.filter((l) => l.tier === "no_website").length,
+        brokenWebsite: db.leads.filter((l) => l.tier === "broken_website").length,
+        activeWebsite: db.leads.filter((l) => l.tier === "active_website").length,
+        highPotential: db.leads.filter((l) => l.tier === "high_potential").length,
       },
     });
   } catch (err: any) {
@@ -58,7 +69,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, status, notes } = body;
+    const { id, status, notes, dealValue, paymentMethod, tier } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -79,7 +90,27 @@ export async function PATCH(req: NextRequest) {
 
     if (status) lead.status = status;
     if (notes !== undefined) lead.notes = notes;
+    if (tier) lead.tier = tier;
+    if (dealValue !== undefined) lead.dealValue = parseFloat(dealValue);
+    if (paymentMethod) lead.paymentMethod = paymentMethod;
     lead.updatedAt = new Date().toISOString();
+
+    // Se foi convertido e tem valor de venda, gera transação no caixa
+    if (status === "converted" && dealValue && parseFloat(dealValue) > 0) {
+      if (!db.sales) db.sales = [];
+      const newSale: SaleRecord = {
+        id: `sale_${crypto.randomUUID().slice(0, 8)}`,
+        userId: lead.userId || "usr_demo_123",
+        leadId: lead.id,
+        leadName: lead.name,
+        amount: parseFloat(dealValue),
+        paymentMethod: paymentMethod || "pix",
+        status: "paid",
+        date: new Date().toISOString(),
+        notes: `Conversão registrada no pipeline: ${lead.notes || ""}`,
+      };
+      db.sales.push(newSale);
+    }
 
     saveDatabase(db);
 
